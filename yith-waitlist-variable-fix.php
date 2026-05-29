@@ -3,7 +3,7 @@
  * Plugin Name: YITH Waiting List - Variable Product Fix
  * Plugin URI:  https://github.com/anirudhatalmale6-alt/yith-waitlist-variable-fix
  * Description: Muestra el formulario de lista de espera en productos variables cuando todas las variaciones estan sin stock, sin necesidad de seleccionar ninguna variacion.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Anirudha Talmale
  * Requires PHP: 7.4
  * Requires at least: 5.8
@@ -12,24 +12,19 @@
  *
  * --- THE PROBLEM ---
  *
- * When a variable product has ALL variations out of stock, WooCommerce renders
- * a plain "out of stock" message using woocommerce_out_of_stock_message filter
- * inside a <p> tag with esc_html(). It does NOT call wc_get_stock_html(), which
- * is the hook the YITH Waiting List plugin uses to inject its form.
- *
- * Result: the waiting list form never appears for fully out-of-stock variable
- * products. Users must select a specific variation first, but WooCommerce hides
- * the variation selector when no variations are available.
+ * When a variable product has ALL variations out of stock, WooCommerce does not
+ * call wc_get_stock_html() for the parent product, which is the hook the YITH
+ * Waiting List plugin uses to inject its form. The form only appears when a
+ * specific variation is selected.
  *
  * --- THE FIX ---
  *
- * This plugin hooks into woocommerce_single_product_summary (right after the
- * add-to-cart section) and outputs the YITH waiting list form for variable
- * products where all variations are out of stock.
- *
- * The form is displayed automatically on page load without needing to select
- * any variation. The YITH plugin's own can_have_waitlist() check still applies,
- * so excluded products are respected.
+ * This plugin:
+ * 1. Injects the waiting list form inside the variation area (same position as
+ *    when a variation is selected) so it appears immediately on page load.
+ * 2. Hides the quantity selector and add-to-cart button.
+ * 3. Automatically hides the form when a variation IS selected (to avoid
+ *    duplicate forms), and shows it again when the selection is cleared.
  *
  * --- FUTURE UPDATES ---
  *
@@ -53,14 +48,9 @@ if ( ! class_exists( 'YITH_Waitlist_Variable_Fix' ) ) {
 		}
 
 		private function __construct() {
-			// Priority 31 = right after woocommerce_template_single_add_to_cart (priority 30).
-			add_action( 'woocommerce_single_product_summary', array( $this, 'show_waitlist_for_variable' ), 31 );
+			add_action( 'woocommerce_before_single_variation', array( $this, 'show_waitlist_for_variable' ), 5 );
 		}
 
-		/**
-		 * Show the waiting list form for variable products where all variations
-		 * are out of stock, and hide the quantity + add-to-cart button.
-		 */
 		public function show_waitlist_for_variable() {
 			global $product;
 
@@ -76,17 +66,40 @@ if ( ! class_exists( 'YITH_Waitlist_Variable_Fix' ) ) {
 				return;
 			}
 
-			// Hide quantity selector and add-to-cart button.
+			$form = do_shortcode( '[ywcwtl_form product_id="' . $product->get_id() . '"]' );
+			if ( empty( $form ) ) {
+				return;
+			}
+
+			// CSS: hide qty + add-to-cart since all variations are out of stock.
 			echo '<style>
-				form.variations_form .woocommerce-variation-add-to-cart,
-				form.variations_form .single_variation_wrap .quantity,
-				form.variations_form .single_add_to_cart_button,
-				form.variations_form button.single_add_to_cart_button {
+				form.variations_form .woocommerce-variation-add-to-cart {
 					display: none !important;
 				}
 			</style>';
 
-			echo do_shortcode( '[ywcwtl_form product_id="' . $product->get_id() . '"]' );
+			// The form wrapper with a specific ID so JS can toggle it.
+			echo '<div id="yith-wcwtl-variable-waitlist">' . $form . '</div>';
+
+			// JS: hide this form when a variation is selected (YITH handles per-variation),
+			// show it again when the selection is cleared.
+			echo '<script>
+				jQuery(function($) {
+					var $form = $("form.variations_form");
+					var $waitlist = $("#yith-wcwtl-variable-waitlist");
+					var $addToCart = $form.find(".woocommerce-variation-add-to-cart");
+
+					$form.on("show_variation", function() {
+						$waitlist.hide();
+						$addToCart.css("display", "");
+					});
+
+					$form.on("hide_variation reset_data", function() {
+						$waitlist.show();
+						$addToCart.hide();
+					});
+				});
+			</script>';
 		}
 	}
 
