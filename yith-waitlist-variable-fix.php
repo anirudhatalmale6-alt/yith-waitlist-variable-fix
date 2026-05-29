@@ -59,7 +59,7 @@ if ( ! class_exists( 'YITH_Waitlist_Variable_Fix' ) ) {
 
 		/**
 		 * Show the waiting list form for variable products where all variations
-		 * are out of stock.
+		 * are out of stock, and hide the quantity + add-to-cart button.
 		 */
 		public function show_waitlist_for_variable() {
 			global $product;
@@ -75,6 +75,16 @@ if ( ! class_exists( 'YITH_Waitlist_Variable_Fix' ) ) {
 			if ( ! defined( 'YITH_WCWTL' ) ) {
 				return;
 			}
+
+			// Hide quantity selector and add-to-cart button.
+			echo '<style>
+				form.variations_form .woocommerce-variation-add-to-cart,
+				form.variations_form .single_variation_wrap .quantity,
+				form.variations_form .single_add_to_cart_button,
+				form.variations_form button.single_add_to_cart_button {
+					display: none !important;
+				}
+			</style>';
 
 			echo do_shortcode( '[ywcwtl_form product_id="' . $product->get_id() . '"]' );
 		}
